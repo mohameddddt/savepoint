@@ -7,6 +7,7 @@ import 'db.dart';
 import 'igdb.dart';
 import 'models.dart';
 import 'theme.dart';
+import 'xbox.dart';
 
 late final Store store;
 
@@ -18,6 +19,7 @@ class Store extends ChangeNotifier {
   final lists = <String, GameList>{};
   final kv = <String, String>{};
   late final Igdb igdb = Igdb(read: (k) => kv[k], write: setKv);
+  late final Xbox xbox = Xbox(read: (k) => kv[k]);
 
   final _rnd = Random();
   Map<int, int>? _sessionMinutes;
@@ -70,6 +72,7 @@ class Store extends ChangeNotifier {
     }
     _sessionMinutes = null;
     _sessionCount = null;
+    _xboxTitles = null;
   }
 
   void _changed() {
@@ -413,6 +416,147 @@ class Store extends ChangeNotifier {
     return g;
   }
 
+  // ───────────────────────── xbox ─────────────────────────
+
+  Map<String, XboxTitle>? _xboxTitles;
+
+  /// Last synced Xbox title history, by title id.
+  Map<String, XboxTitle> get xboxTitles {
+    if (_xboxTitles != null) return _xboxTitles!;
+    try {
+      final l = jsonDecode(kv['xbl_titles'] ?? '[]') as List;
+      _xboxTitles = {for (final j in l.cast<Map<String, dynamic>>()) j['id'] as String: XboxTitle.fromJson(j)};
+    } catch (_) {
+      _xboxTitles = {};
+    }
+    return _xboxTitles!;
+  }
+
+  XboxProfile? get xboxProfile {
+    final s = kv['xbl_profile'];
+    if (s == null) return null;
+    try {
+      return XboxProfile.fromJson(jsonDecode(s));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  XboxTitle? xboxFor(int gameId) => xboxTitles.values.where((t) => t.gameId == gameId).firstOrNull;
+
+  Set<String> get xboxSkipped => (kv['xbl_skip'] ?? '').split(',').where((s) => s.isNotEmpty).toSet();
+
+  Future<XboxProfile> connectXbox(String key) async {
+    final old = kv['xbl_key'];
+    setKv('xbl_key', key.trim());
+    try {
+      final p = await xbox.profile();
+      setPref('xbl_profile', jsonEncode(p.toJson()));
+      return p;
+    } catch (_) {
+      setKv('xbl_key', old);
+      rethrow;
+    }
+  }
+
+  void disconnectXbox() {
+    for (final k in ['xbl_key', 'xbl_profile']) {
+      setKv(k, null);
+    }
+    notifyListeners();
+  }
+
+  /// Pulls profile, title history and playtime. Unlinked titles get an IGDB
+  /// suggestion (title id -> (game, confident)) for the review screen.
+  Future<(List<XboxTitle>, Map<String, (Game, bool)>)> fetchXbox({void Function(String stage)? onStage}) async {
+    onStage?.call('Reading your profile…');
+    final p = await xbox.profile();
+    setKv('xbl_profile', jsonEncode(p.toJson()));
+    onStage?.call('Loading your games…');
+    final titles = await xbox.titles();
+    onStage?.call('Counting your hours…');
+    try {
+      final mins = await xbox.minutesPlayed(p.xuid, titles.map((t) => t.id).toList());
+      for (final t in titles) {
+        t.minutes = mins[t.id] ?? 0;
+      }
+    } on XboxError catch (e) {
+      if (e.code == 429) rethrow; // playtime is optional; anything else just skips it
+    }
+    final known = xboxTitles;
+    for (final t in titles) {
+      final g = known[t.id]?.gameId;
+      if (g != null && games.containsKey(g)) t.gameId = g;
+    }
+    final suggestions = <String, (Game, bool)>{};
+    final todo = {for (final t in titles.where((t) => t.gameId == null)) t.id: t.searchName};
+    if (todo.isNotEmpty && igdb.configured) {
+      onStage?.call('Matching ${todo.length} games…');
+      suggestions.addAll(await igdb.matchNames(todo, onProgress: (n) => onStage?.call('Matching games… $n/${todo.length}')));
+    }
+    return (titles, suggestions);
+  }
+
+  /// Applies a reviewed import. Existing entries keep their status and rating;
+  /// only the Xbox playtime added since the last sync is added to them.
+  int applyXbox(List<XboxTitle> all, List<(XboxTitle, Game, Status)> picked) {
+    final prev = xboxTitles;
+    final pickedIds = picked.map((p) => p.$1.id).toSet();
+    var added = 0;
+    for (final (t, g, status) in picked) {
+      cacheGame(g);
+      final before = prev[t.id];
+      final already = before?.gameId == g.id ? before!.minutes : 0;
+      final platform = _xboxPlatform(t, g);
+      final e = entries[g.id];
+      if (e == null) {
+        added++;
+        final ne = Entry(gameId: g.id, status: status, platform: platform, baseMinutes: t.minutes);
+        if (status.finished && t.mastered) ne.finishedAt = t.lastPlayed;
+        entries[g.id] = ne;
+        db.put('entries', g.id, ne.toJson());
+      } else {
+        e.baseMinutes = (e.baseMinutes + t.minutes - already).clamp(0, 1 << 30);
+        e.platform ??= platform;
+        e.updatedAt = now;
+        db.put('entries', g.id, e.toJson());
+      }
+      t.gameId = g.id;
+    }
+    // Keep earlier links for titles not imported this time, but only count
+    // minutes we actually added.
+    for (final t in all) {
+      if (pickedIds.contains(t.id)) continue;
+      final before = prev[t.id];
+      t.gameId = before?.gameId;
+      t.minutes = before?.minutes ?? 0;
+    }
+    final skipped = all.where((t) => !pickedIds.contains(t.id) && t.gameId == null).map((t) => t.id);
+    setKv('xbl_skip', skipped.join(','));
+    setKv('xbl_titles', jsonEncode(all.map((t) => t.toJson()).toList()));
+    setKv('xbl_synced', '$now');
+    _xboxTitles = null;
+    _changed();
+    return added;
+  }
+
+  static String? _xboxPlatform(XboxTitle t, Game g) {
+    const map = {
+      'XboxSeries': 'Series X|S',
+      'Scarlett': 'Series X|S',
+      'XboxOne': 'XONE',
+      'Xbox360': 'X360',
+      'PC': 'PC',
+      'Win32': 'PC',
+    };
+    for (final d in t.devices) {
+      final p = map[d];
+      if (p != null && (g.platforms.isEmpty || g.platforms.contains(p))) return p;
+    }
+    final first = t.devices.map((d) => map[d]).whereType<String>().firstOrNull;
+    return first;
+  }
+
   // ───────────────────────── backup ─────────────────────────
 
   Map<String, dynamic> exportData() => {
@@ -425,7 +569,7 @@ class Store extends ChangeNotifier {
     'lists': lists.values.map((l) => l.toJson()).toList(),
     'kv': {
       for (final e in kv.entries)
-        if (!e.key.startsWith('igdb_') && !e.key.startsWith('rail_')) e.key: e.value,
+        if (!e.key.startsWith('igdb_') && !e.key.startsWith('rail_') && e.key != 'xbl_key') e.key: e.value,
     },
   };
 
