@@ -25,6 +25,23 @@ Savepoint uses IGDB, the same database Backloggd uses, for covers, search and di
 
 Your keys stay on the device and are never put in backups. You can also add games without IGDB using "Add manually".
 
+## Connect Xbox (optional, free)
+
+Savepoint can import your Xbox and PC Game Pass history: every game you've played, plus hours, achievements and gamerscore. Microsoft no longer lets personal accounts register their own Xbox Live apps, so this goes through [OpenXBL](https://xbl.io), a free service that reads your Xbox data with your permission.
+
+1. Sign in at https://xbl.io with the Microsoft account linked to your Xbox profile.
+2. On your xbl.io profile page, create an API key and copy it.
+3. In the app, go to Settings → Xbox, paste the key, and tap **Connect**.
+4. Tap **Sync my Xbox games**. Every game is matched to IGDB, and you review the list before anything is added. You can fix matches, change statuses and untick games you don't want.
+
+How the import behaves:
+- New games get a suggested status: 100% if every achievement is unlocked, Playing if played in the last 30 days, Played otherwise.
+- Games already in your library keep their status and rating. Only the Xbox playtime added since your last sync is added to them, so syncing again never double-counts.
+- Each linked game's page shows its Xbox achievements, gamerscore and last-played date. Your gamertag and gamerscore appear on your Profile.
+- A sync uses 3–4 OpenXBL calls. Free keys allow about 150 calls an hour.
+
+The key stays on the device and is never put in backups.
+
 ## Features
 
 - **Library**: 8 statuses (Playing, Completed, 100%, Played, Shelved, Abandoned, Backlog, Wishlist), half-star ratings, likes, platform, tags, priority and private notes. Grid and list views, 8 sort orders, and filters by platform, genre, tag and reviewed.
