@@ -16,6 +16,7 @@ import '../util.dart';
 import '../widgets/common.dart';
 import 'log_sheet.dart';
 import 'shell.dart';
+import 'xbox.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -114,6 +115,13 @@ class SettingsScreen extends StatelessWidget {
                 onTap: () => push(context, const IgdbSetupScreen()),
               ),
               _Row(
+                icon: Icons.sports_esports_outlined,
+                title: 'Xbox',
+                value: store.xbox.configured ? (store.xboxProfile?.gamertag ?? 'Connected') : 'Not connected',
+                valueColor: store.xbox.configured ? xboxGreen : null,
+                onTap: () => push(context, const XboxScreen()),
+              ),
+              _Row(
                 icon: Icons.cleaning_services_outlined,
                 title: 'Clear image cache',
                 onTap: () async {
@@ -148,6 +156,7 @@ class SettingsScreen extends StatelessWidget {
                           Text('${store.entries.length} games · ${store.logs.length} diary entries · ${store.lists.length} lists', style: T.small),
                           const SizedBox(height: 3),
                           Text('Game data courtesy of IGDB.com', style: T.small),
+                          if (store.xbox.configured) Text('Xbox data via OpenXBL', style: T.small),
                         ],
                       ),
                     ),
