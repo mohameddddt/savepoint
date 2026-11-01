@@ -16,6 +16,7 @@ import 'shell.dart';
 import 'spin.dart';
 import 'stats.dart';
 import 'upcoming.dart';
+import 'xbox.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -105,6 +106,11 @@ class ProfileScreen extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (store.xbox.configured)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                    child: XboxProfileCard(store.xboxProfile, onTap: () => push(context, const XboxScreen())),
+                  ),
                 SectionHead('Top five', kicker: 'All-time favourites', action: store.favs.isEmpty ? null : 'Edit', onAction: () => _editFavs(context)),
                 const Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: _Favs()),
                 const SectionHead('Ratings', kicker: 'Your taste'),
