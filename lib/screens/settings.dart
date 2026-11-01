@@ -302,7 +302,7 @@ class _IgdbSetupScreenState extends State<IgdbSetupScreen> {
         children: [
           Text('IGDB is the database behind Backloggd. It’s free — you just need your own Twitch developer keys. Two minutes, once.', style: T.body1),
           const SizedBox(height: 22),
-          const _Step(
+          const SetupStep(
             1,
             'Open the Twitch developer console',
             'Log in with any Twitch account. Twitch requires two-factor auth to be enabled for developer apps.',
@@ -320,7 +320,7 @@ class _IgdbSetupScreenState extends State<IgdbSetupScreen> {
               ),
             ),
           ),
-          const _Step(
+          const SetupStep(
             2,
             'Register an application',
             'Name: anything (e.g. “savepoint-me”)\nOAuth Redirect URL: http://localhost\nCategory: Application Integration\nClient type: Confidential',
@@ -341,7 +341,7 @@ class _IgdbSetupScreenState extends State<IgdbSetupScreen> {
               ),
             ),
           ),
-          const _Step(3, 'Copy your keys', 'Open the app → copy the Client ID → press “New Secret” and copy it. Paste both below.'),
+          const SetupStep(3, 'Copy your keys', 'Open the app → copy the Client ID → press “New Secret” and copy it. Paste both below.'),
           const SizedBox(height: 8),
           TextField(
             controller: id,
@@ -384,8 +384,8 @@ class _IgdbSetupScreenState extends State<IgdbSetupScreen> {
   }
 }
 
-class _Step extends StatelessWidget {
-  const _Step(this.n, this.title, this.body);
+class SetupStep extends StatelessWidget {
+  const SetupStep(this.n, this.title, this.body, {super.key});
   final int n;
   final String title;
   final String body;
