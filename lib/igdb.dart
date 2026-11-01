@@ -147,6 +147,44 @@ class Igdb {
     return games;
   }
 
+  static String _norm(String s) => s.toLowerCase().replaceAll('&', 'and').replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+  /// Best IGDB match for each name, 10 searches per request via multiquery.
+  /// Returns key -> (game, confident) where confident means an exact name match.
+  Future<Map<String, (Game, bool)>> matchNames(Map<String, String> names, {void Function(int done)? onProgress}) async {
+    final out = <String, (Game, bool)>{};
+    final keys = names.keys.toList();
+    const xboxish = {'XONE', 'Series X|S', 'X360', 'XBOX', 'PC'};
+    for (var i = 0; i < keys.length; i += 10) {
+      final chunk = keys.sublist(i, (i + 10).clamp(0, keys.length));
+      final body = StringBuffer();
+      for (var k = 0; k < chunk.length; k++) {
+        body.write('query games "$k" { search "${_esc(names[chunk[k]]!)}"; $lite where version_parent = null; limit 8; };\n');
+      }
+      final rows = await q('multiquery', body.toString());
+      for (final r in rows) {
+        final k = int.tryParse('${r['name']}');
+        if (k == null || k >= chunk.length) continue;
+        final games = (r['result'] as List? ?? const []).whereType<Map<String, dynamic>>().map((e) => Game.fromIgdb(e)).toList();
+        if (games.isEmpty) continue;
+        final want = _norm(names[chunk[k]]!);
+        int tier(Game g) {
+          final n = _norm(g.name);
+          if (n == want) return 3;
+          if (n.startsWith(want) || want.startsWith(n)) return 2;
+          return n.contains(want) || want.contains(n) ? 1 : 0;
+        }
+
+        int score(Game g) => tier(g) * 100000 + (g.platforms.any(xboxish.contains) ? 50000 : 0) + (g.ratingCount ?? 0).clamp(0, 49999);
+        games.sort((a, b) => score(b).compareTo(score(a)));
+        out[chunk[k]] = (games.first, tier(games.first) == 3);
+      }
+      onProgress?.call(i + chunk.length);
+      if (i + 10 < keys.length) await Future.delayed(const Duration(milliseconds: 260));
+    }
+    return out;
+  }
+
   Game? cachedDetail(int id) => _details[id];
   void forget(int id) => _details.remove(id);
 
