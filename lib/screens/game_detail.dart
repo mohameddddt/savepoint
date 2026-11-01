@@ -11,6 +11,7 @@ import '../widgets/common.dart';
 import '../widgets/rating.dart';
 import 'gallery.dart';
 import 'log_sheet.dart';
+import 'xbox.dart';
 
 class GameDetailScreen extends StatefulWidget {
   const GameDetailScreen({super.key, required this.game, this.heroTag});
@@ -73,6 +74,10 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
                   SliverToBoxAdapter(child: _header(context, mq)),
                   SliverToBoxAdapter(child: _actions(context, e)),
                   if (e != null) SliverToBoxAdapter(child: _yourLog(context, e)),
+                  if (store.xboxFor(g.id) case final xt?)
+                    SliverToBoxAdapter(
+                      child: Padding(padding: const EdgeInsets.fromLTRB(20, 10, 20, 0), child: XboxGameCard(xt)),
+                    ),
                   ..._body(context, e),
                   SliverToBoxAdapter(child: SizedBox(height: mq.padding.bottom + 40)),
                 ],
