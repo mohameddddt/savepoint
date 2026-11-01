@@ -14,9 +14,10 @@ import 'settings.dart';
 
 /// Search IGDB + your library. In [pick] mode, returns the tapped [Game].
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key, this.pick = false, this.title});
+  const SearchScreen({super.key, this.pick = false, this.title, this.initial});
   final bool pick;
   final String? title;
+  final String? initial;
   @override
   State<SearchScreen> createState() => _SearchScreenState();
 }
@@ -29,6 +30,17 @@ class _SearchScreenState extends State<SearchScreen> {
   bool loading = false;
   String? error;
   int _req = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    final i = widget.initial?.trim() ?? '';
+    if (i.isNotEmpty) {
+      c.text = i;
+      q = i;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _run(i));
+    }
+  }
 
   List<String> get recent {
     try {
